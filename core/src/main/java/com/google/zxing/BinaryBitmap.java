@@ -88,6 +88,54 @@ public final class BinaryBitmap {
   }
 
   /**
+   * Clears a rectangular region of the black matrix by setting all bits to false
+   * (white).
+   *
+   * @param x      left coordinate (inclusive)
+   * @param y      top coordinate (inclusive)
+   * @param width  width of region
+   * @param height height of region
+   */
+  public void clear(int x, int y, int width, int height) {
+    try {
+      BitMatrix m = getBlackMatrix();
+
+      // Sanitize values
+      if (width <= 0 || height <= 0) {
+        System.out.println("[DEBUG] Skipping clearRegion due to invalid size: w=" + width + " h=" + height);
+        return;
+      }
+      int maxWidth = m.getWidth();
+      int maxHeight = m.getHeight();
+      int x2 = Math.min(x + width, maxWidth);
+      int y2 = Math.min(y + height, maxHeight);
+      int x1 = Math.max(0, x);
+      int y1 = Math.max(0, y);
+
+      for (int yy = y1; yy < y2; yy++) {
+        for (int xx = x1; xx < x2; xx++) {
+          m.unset(xx, yy); // clear pixel
+        }
+      }
+    } catch (NotFoundException e) {
+      // matrix not initialized, ignore
+    }
+  }
+
+//  public void clear(int left, int top, int width, int height) throws NotFoundException {
+//    BitMatrix m = getBlackMatrix();
+//    int right = Math.min(left + width, m.getWidth());
+//    int bottom = Math.min(top + height, m.getHeight());
+//    for (int y = top; y < bottom; y++) {
+//      for (int x = left; x < right; x++) {
+//        m.unset(x, y);
+//      }
+//    }
+//  }
+//
+
+  
+  /**
    * @return Whether this bitmap can be cropped.
    */
   public boolean isCropSupported() {
