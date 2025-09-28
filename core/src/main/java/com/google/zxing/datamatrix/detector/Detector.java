@@ -16,16 +16,27 @@
 
 package com.google.zxing.datamatrix.detector;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+
+import javax.imageio.ImageIO;
+
 import com.google.zxing.NotFoundException;
 import com.google.zxing.ResultPoint;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.common.DetectorResult;
 import com.google.zxing.common.GridSampler;
+import com.google.zxing.common.detector.ExternalRectangleDetector;
 import com.google.zxing.common.detector.WhiteRectangleDetector;
 
+
+
 /**
- * <p>Encapsulates logic that can detect a Data Matrix Code in an image, even if the Data Matrix Code
- * is rotated or skewed, or partially obscured.</p>
+ * <p>
+ * Encapsulates logic that can detect a Data Matrix Code in an image, even if
+ * the Data Matrix Code is rotated or skewed, or partially obscured.
+ * </p>
  *
  * @author Sean Owen
  */
@@ -39,22 +50,56 @@ public final class Detector {
     rectangleDetector = new WhiteRectangleDetector(image);
   }
 
+  private void saveBitMatrixForDebugging(BitMatrix matrix, String fileName) throws IOException {
+    int width = matrix.getWidth();
+    int height = matrix.getHeight();
+    BufferedImage bmImage = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY);
+
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        int val = matrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF;
+        bmImage.setRGB(x, y, val);
+      }
+    }
+    String safeName = new File(fileName).getName().replaceAll("[^a-zA-Z0-9._-]", "_");
+    File outFile = new File("debug", String.format("bitmatrix-%s.png", safeName));
+    outFile.getParentFile().mkdirs();
+    ImageIO.write(bmImage, "png", outFile);
+  }
+
+
   /**
-   * <p>Detects a Data Matrix Code in an image.</p>
+   * <p>
+   * Detects a Data Matrix Code in an image.
+   * </p>
    *
-   * @return {@link DetectorResult} encapsulating results of detecting a Data Matrix Code
+   * @return {@link DetectorResult} encapsulating results of detecting a Data
+   *         Matrix Code
    * @throws NotFoundException if no Data Matrix Code can be found
    */
-  public DetectorResult detect() throws NotFoundException {
 
-    ResultPoint[] cornerPoints = rectangleDetector.detect();
+  public DetectorResult detect() throws NotFoundException {
+    ResultPoint[] cornerPoints;
+
+    try {
+      cornerPoints = rectangleDetector.detect();
+    } catch (NotFoundException nfe) {
+      cornerPoints = tryExternalDetectors(image, "primary");
+    }
 
     ResultPoint[] points = detectSolid1(cornerPoints);
     points = detectSolid2(points);
     points[3] = correctTopRight(points);
     if (points[3] == null) {
-      throw NotFoundException.getNotFoundInstance();
+      // Try external once more if topology is impossible
+      ResultPoint[] ext = tryExternalDetectors(image, "topology");
+      points = detectSolid2(detectSolid1(ext));
+      points[3] = correctTopRight(points);
+      if (points[3] == null) {
+        throw NotFoundException.getNotFoundInstance();
+      }
     }
+
     points = shiftToModuleCenter(points);
 
     ResultPoint topLeft = points[0];
@@ -71,20 +116,140 @@ public final class Detector {
       dimensionRight += 1;
     }
 
-    if (4 * dimensionTop < 6 * dimensionRight && 4 * dimensionRight < 6 * dimensionTop) {
-      // The matrix is square
-      dimensionTop = dimensionRight = Math.max(dimensionTop, dimensionRight);
+    if (badDimensions(dimensionTop, dimensionRight)) {
+      ResultPoint[] ext = tryExternalDetectors(image, "dims");
+      points = shiftToModuleCenter(detectSolid2(detectSolid1(ext)));
+      topLeft = points[0];
+      bottomLeft = points[1];
+      bottomRight = points[2];
+      topRight = points[3];
+
+      dimensionTop = transitionsBetween(topLeft, topRight) + 1;
+      dimensionRight = transitionsBetween(bottomRight, topRight) + 1;
+      if ((dimensionTop & 0x01) == 1) {
+        dimensionTop += 1;
+      }
+      if ((dimensionRight & 0x01) == 1) {
+        dimensionRight += 1;
+      }
     }
 
-    BitMatrix bits = sampleGrid(image,
-                                topLeft,
-                                bottomLeft,
-                                bottomRight,
-                                topRight,
-                                dimensionTop,
-                                dimensionRight);
+    System.out.printf(
+        "Corner points: TL(%.1f,%.1f) BL(%.1f,%.1f) BR(%.1f,%.1f) TR(%.1f,%.1f)\n",
+        topLeft.getX(), topLeft.getY(),
+        bottomLeft.getX(), bottomLeft.getY(),
+        bottomRight.getX(), bottomRight.getY(),
+        topRight.getX(), topRight.getY());
 
+    System.out.printf("Detector: ->Computed dimensions: top=%d right=%d\n", dimensionTop, dimensionRight);
+
+    BitMatrix bits;
+    try {
+      bits = sampleGrid(image, topLeft, bottomLeft, bottomRight, topRight, dimensionTop, dimensionRight, false);
+    } catch (NotFoundException e) {
+      System.out.println("Detector: standard grid failed, retrying with jiggle sampling…\n");
+      bits = sampleGridWithJiggle(image, topLeft, bottomLeft, bottomRight, topRight, dimensionTop, dimensionRight);
+    }
+
+    try {
+      saveBitMatrixForDebugging(bits, "detector-bm-");
+    } catch (IOException e) {
+      System.err.println("Cannot write bitmap to debugging file.\n");
+      e.printStackTrace();
+    }
     return new DetectorResult(bits, new ResultPoint[]{topLeft, bottomLeft, bottomRight, topRight});
+  }
+
+
+  private static ResultPoint[] tryExternalDetectors(BitMatrix image, String reason) throws NotFoundException {
+    java.util.ServiceLoader<ExternalRectangleDetector> loader =
+        java.util.ServiceLoader.load(ExternalRectangleDetector.class);
+
+    for (ExternalRectangleDetector det : loader) {
+      try {
+        System.out.println("Detector: trying external rectangle detector (" + det.getName() + ") because: " 
+            + reason + "\n");
+        ResultPoint[] pts = det.detect(image);
+        if (pts != null && pts.length == 4) {
+          return pts;
+        }
+      } catch (Throwable t) {
+        System.out.println("Detector: external detector " + det.getName() + " failed: " + t.getMessage() + "\n");
+      }
+    }
+    throw NotFoundException.getNotFoundInstance();
+  }
+
+  private static boolean badDimensions(int top, int right) {
+    if (top < 8 || right < 8) {
+      return true;
+    }
+    int max = Math.max(top, right);
+    int min = Math.min(top, right);
+    if (max > 3 * min) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * 
+   * @param delta - how much to shift
+   * @return - result
+   * @throws NotFoundException - nfe
+   */
+
+  public DetectorResult detectWithPerturbation(int delta) throws NotFoundException {
+    NotFoundException lastEx = null;
+
+    // Try small ±delta shifts around each corner
+    int[] shifts = { 0, -delta, delta };
+    for (int dx : shifts) {
+      for (int dy : shifts) {
+        try {
+          ResultPoint[] points = rectangleDetector.detect();
+
+          // Apply perturbation to each corner
+          for (ResultPoint p : points) {
+            p = new ResultPoint(p.getX() + dx, p.getY() + dy);
+          }
+
+          // Then proceed same as detect()
+          ResultPoint[] solid1 = detectSolid1(points);
+          ResultPoint[] solid2 = detectSolid2(solid1);
+          solid2[3] = correctTopRight(solid2);
+          if (solid2[3] == null) {
+            continue;
+          }
+
+          solid2 = shiftToModuleCenter(solid2);
+
+          int dimensionTop = transitionsBetween(solid2[0], solid2[3]) + 1;
+          int dimensionRight = transitionsBetween(solid2[2], solid2[3]) + 1;
+
+          if ((dimensionTop & 1) == 1) {
+            dimensionTop++;
+          }
+          if ((dimensionRight & 1) == 1) {
+            dimensionRight++;
+          }
+
+          if (4 * dimensionTop < 6 * dimensionRight && 4 * dimensionRight < 6 * dimensionTop) {
+            dimensionTop = dimensionRight = Math.max(dimensionTop, dimensionRight);
+          }
+
+          BitMatrix bits = sampleGrid(image, solid2[0], solid2[1], solid2[2], solid2[3], dimensionTop, dimensionRight,
+              true);
+
+          return new DetectorResult(bits, solid2);
+
+        } catch (NotFoundException ex) {
+          lastEx = NotFoundException.getNotFoundInstance();
+          // continue looping
+        }
+      }
+    }
+    throw lastEx != null ? lastEx : NotFoundException.getNotFoundInstance();
   }
 
   private static ResultPoint shiftPoint(ResultPoint point, ResultPoint to, int div) {
@@ -116,8 +281,8 @@ public final class Detector {
    * Detect a solid side which has minimum transition.
    */
   private ResultPoint[] detectSolid1(ResultPoint[] cornerPoints) {
-    // 0  2
-    // 1  3
+    // 0 2
+    // 1 3
     ResultPoint pointA = cornerPoints[0];
     ResultPoint pointB = cornerPoints[1];
     ResultPoint pointC = cornerPoints[3];
@@ -129,10 +294,10 @@ public final class Detector {
     int trDA = transitionsBetween(pointD, pointA);
 
     // 0..3
-    // :  :
+    // : :
     // 1--2
     int min = trAB;
-    ResultPoint[] points = {pointD, pointA, pointB, pointC};
+    ResultPoint[] points = { pointD, pointA, pointB, pointC };
     if (min > trBC) {
       min = trBC;
       points[0] = pointA;
@@ -162,7 +327,7 @@ public final class Detector {
    */
   private ResultPoint[] detectSolid2(ResultPoint[] points) {
     // A..D
-    // :  :
+    // : :
     // B--C
     ResultPoint pointA = points[0];
     ResultPoint pointB = points[1];
@@ -178,7 +343,7 @@ public final class Detector {
     int trCD = transitionsBetween(pointCs, pointD);
 
     // 0..3
-    // |  :
+    // | :
     // 1--2
     if (trBA < trCD) {
       // solid sides: A-B-C
@@ -202,7 +367,7 @@ public final class Detector {
    */
   private ResultPoint correctTopRight(ResultPoint[] points) {
     // A..D
-    // |  :
+    // | :
     // B--C
     ResultPoint pointA = points[0];
     ResultPoint pointB = points[1];
@@ -218,11 +383,9 @@ public final class Detector {
     trTop = transitionsBetween(pointAs, pointD);
     trRight = transitionsBetween(pointCs, pointD);
 
-    ResultPoint candidate1 = new ResultPoint(
-        pointD.getX() + (pointC.getX() - pointB.getX()) / (trTop + 1),
+    ResultPoint candidate1 = new ResultPoint(pointD.getX() + (pointC.getX() - pointB.getX()) / (trTop + 1),
         pointD.getY() + (pointC.getY() - pointB.getY()) / (trTop + 1));
-    ResultPoint candidate2 = new ResultPoint(
-        pointD.getX() + (pointA.getX() - pointB.getX()) / (trRight + 1),
+    ResultPoint candidate2 = new ResultPoint(pointD.getX() + (pointA.getX() - pointB.getX()) / (trRight + 1),
         pointD.getY() + (pointA.getY() - pointB.getY()) / (trRight + 1));
 
     if (!isValid(candidate1)) {
@@ -250,7 +413,7 @@ public final class Detector {
    */
   private ResultPoint[] shiftToModuleCenter(ResultPoint[] points) {
     // A..D
-    // |  :
+    // | :
     // B--C
     ResultPoint pointA = points[0];
     ResultPoint pointB = points[1];
@@ -265,7 +428,7 @@ public final class Detector {
     ResultPoint pointAs = shiftPoint(pointA, pointB, dimV * 4);
     ResultPoint pointCs = shiftPoint(pointC, pointB, dimH * 4);
 
-    //  calculate more precise dimensions
+    // calculate more precise dimensions
     dimH = transitionsBetween(pointAs, pointD) + 1;
     dimV = transitionsBetween(pointCs, pointD) + 1;
     if ((dimH & 0x01) == 1) {
@@ -297,46 +460,98 @@ public final class Detector {
     pointDs = shiftPoint(pointD, pointC, dimV * 4);
     pointDs = shiftPoint(pointDs, pointA, dimH * 4);
 
-    return new ResultPoint[]{pointAs, pointBs, pointCs, pointDs};
+    return new ResultPoint[] { pointAs, pointBs, pointCs, pointDs };
   }
 
   private boolean isValid(ResultPoint p) {
     return p.getX() >= 0 && p.getX() <= image.getWidth() - 1 && p.getY() > 0 && p.getY() <= image.getHeight() - 1;
   }
 
-  private static BitMatrix sampleGrid(BitMatrix image,
-                                      ResultPoint topLeft,
-                                      ResultPoint bottomLeft,
-                                      ResultPoint bottomRight,
-                                      ResultPoint topRight,
-                                      int dimensionX,
-                                      int dimensionY) throws NotFoundException {
-
+  private static BitMatrix sampleGridWithJiggle(BitMatrix image, ResultPoint topLeft, ResultPoint bottomLeft,
+      ResultPoint bottomRight, ResultPoint topRight, int dimensionX, int dimensionY) throws NotFoundException {
     GridSampler sampler = GridSampler.getInstance();
 
-    return sampler.sampleGrid(image,
-                              dimensionX,
-                              dimensionY,
-                              0.5f,
-                              0.5f,
-                              dimensionX - 0.5f,
-                              0.5f,
-                              dimensionX - 0.5f,
-                              dimensionY - 0.5f,
-                              0.5f,
-                              dimensionY - 0.5f,
-                              topLeft.getX(),
-                              topLeft.getY(),
-                              topRight.getX(),
-                              topRight.getY(),
-                              bottomRight.getX(),
-                              bottomRight.getY(),
-                              bottomLeft.getX(),
-                              bottomLeft.getY());
+    float[] offsets = { 0.25f, 0.5f, 0.75f };
+    BitMatrix best = null;
+    int bestScore = -1;
+
+    for (float ox : offsets) {
+      for (float oy : offsets) {
+        try {
+          BitMatrix candidate = sampler.sampleGrid(image, dimensionX, dimensionY, ox, oy, dimensionX - 1 + ox, oy,
+              dimensionX - 1 + ox, dimensionY - 1 + oy, ox, dimensionY - 1 + oy, topLeft.getX(), topLeft.getY(),
+              topRight.getX(), topRight.getY(), bottomRight.getX(), bottomRight.getY(), bottomLeft.getX(),
+              bottomLeft.getY());
+
+// crude quality score: count balance of black/white modules
+          int blacks = 0;
+          int total = dimensionX * dimensionY;
+          for (int y = 0; y < dimensionY; y++) {
+            for (int x = 0; x < dimensionX; x++) {
+              if (candidate.get(x, y)) {
+                blacks++;
+              }
+            }
+          }
+          int score = Math.min(blacks, total - blacks); // prefer balanced
+          if (score > bestScore) {
+            bestScore = score;
+            best = candidate;
+          }
+        } catch (NotFoundException ignore) {
+// try next offset
+        }
+      }
+    }
+
+    if (best == null) {
+      throw NotFoundException.getNotFoundInstance();
+    }
+    return best;
+  }
+
+  private static BitMatrix sampleGrid(BitMatrix image, ResultPoint topLeft, ResultPoint bottomLeft,
+      ResultPoint bottomRight, ResultPoint topRight, int dimensionX, int dimensionY, boolean jiggle)
+      throws NotFoundException {
+
+    GridSampler sampler = GridSampler.getInstance();
+    BitMatrix base = sampler.sampleGrid(image, dimensionX, dimensionY, 0.5f, 0.5f, dimensionX - 0.5f, 0.5f,
+        dimensionX - 0.5f, dimensionY - 0.5f, 0.5f, dimensionY - 0.5f, topLeft.getX(), topLeft.getY(), topRight.getX(),
+        topRight.getY(), bottomRight.getX(), bottomRight.getY(), bottomLeft.getX(), bottomLeft.getY());
+
+    if (!jiggle) {
+      return base;
+    }
+
+// Oversample/jiggle mode: majority vote over a 3x3 neighborhood
+    BitMatrix oversampled = new BitMatrix(dimensionX, dimensionY);
+    for (int y = 0; y < dimensionY; y++) {
+      for (int x = 0; x < dimensionX; x++) {
+        int blackCount = 0;
+        int total = 0;
+        for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+            int nx = x + dx;
+            int ny = y + dy;
+            if (nx >= 0 && nx < dimensionX && ny >= 0 && ny < dimensionY) {
+              total++;
+              if (base.get(nx, ny)) {
+                blackCount++;
+              }
+            }
+          }
+        }
+        if (blackCount > total / 2) {
+          oversampled.set(x, y);
+        }
+      }
+    }
+    return oversampled;
   }
 
   /**
-   * Counts the number of black/white transitions between two points, using something like Bresenham's algorithm.
+   * Counts the number of black/white transitions between two points, using
+   * something like Bresenham's algorithm.
    */
   private int transitionsBetween(ResultPoint from, ResultPoint to) {
     // See QR Code Detector, sizeOfBlackWhiteBlackRun()

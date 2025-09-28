@@ -101,9 +101,10 @@ final class DataBlock {
     }
 
     if (rawCodewordsOffset != rawCodewords.length) {
+      System.err.printf("getDataBlocks. rawCodewordsOffset: %d, rawCodewords.length: %d\n", rawCodewordsOffset, 
+          rawCodewords.length);
       throw new IllegalArgumentException();
-    }
-
+    }      
     return result;
   }
 

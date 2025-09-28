@@ -35,6 +35,7 @@ final class BitMatrixParser {
   BitMatrixParser(BitMatrix bitMatrix) throws FormatException {
     int dimension = bitMatrix.getHeight();
     if (dimension < 8 || dimension > 144 || (dimension & 0x01) != 0) {
+      System.err.printf("BitMatrixParser constructor has invalid %d dimension.", dimension);
       throw FormatException.getFormatInstance();
     }
 
@@ -61,6 +62,7 @@ final class BitMatrixParser {
   private static Version readVersion(BitMatrix bitMatrix) throws FormatException {
     int numRows = bitMatrix.getHeight();
     int numColumns = bitMatrix.getWidth();
+    System.err.printf("readVersion reading %d rows and %d columns.\n", numRows, numColumns);
     return Version.getVersionForDimensions(numRows, numColumns);
   }
 
@@ -137,6 +139,8 @@ final class BitMatrixParser {
     } while ((row < numRows) || (column < numColumns));
 
     if (resultOffset != version.getTotalCodewords()) {
+      System.err.printf("readCodeWords. Offset: %d, expected total code words: %d\n", 
+          resultOffset, version.getTotalCodewords());
       throw FormatException.getFormatInstance();
     }
     return result;
@@ -407,6 +411,8 @@ final class BitMatrixParser {
     int symbolSizeColumns = version.getSymbolSizeColumns();
 
     if (bitMatrix.getHeight() != symbolSizeRows) {
+      System.err.printf("extract data region. Symbol Size Rows: %d, BitMatrix Height: %d\n", 
+          symbolSizeRows, bitMatrix.getHeight());
       throw new IllegalArgumentException("Dimension of bitMatrix must match the version size");
     }
 

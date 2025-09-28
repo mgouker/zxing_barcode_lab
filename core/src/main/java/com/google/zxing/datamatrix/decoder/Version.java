@@ -97,6 +97,7 @@ public final class Version {
    */
   public static Version getVersionForDimensions(int numRows, int numColumns) throws FormatException {
     if ((numRows & 0x01) != 0 || (numColumns & 0x01) != 0) {
+      System.err.printf("getVersionForDimensions: odd dimension numRows=%d, numCols=%d\n", numRows, numColumns);
       throw FormatException.getFormatInstance();
     }
 
@@ -106,9 +107,48 @@ public final class Version {
       }
     }
 
+    // No exact match → try to snap to closest
+    Version closest = findClosestVersion(numRows, numColumns);
+    if (closest != null) {
+      System.err.printf("Snapped dimensions (%d,%d) → valid version (%d,%d)\n",
+          numRows, numColumns, closest.symbolSizeRows, closest.symbolSizeColumns);
+      return closest;
+    }
+
+    System.err.printf("Format exception at getVersionForDimensions: (%d,%d)\n", numRows, numColumns);
     throw FormatException.getFormatInstance();
   }
+  
+  
+  /**
+   * avoid falling into version holes and bailing by guessing when we can
+   * @param numRows - rows
+   * @param numCols - columns
+   * @return - a possible version
+   */
 
+  public static Version findClosestVersion(int numRows, int numCols) {
+    Version best = null;
+    int bestScore = Integer.MAX_VALUE;
+
+    for (Version v : VERSIONS) {
+      int dr = Math.abs(v.symbolSizeRows - numRows);
+      int dc = Math.abs(v.symbolSizeColumns - numCols);
+      int score = dr + dc;
+      if (score < bestScore) {
+        best = v;
+        bestScore = score;
+      }
+    }
+
+    if (best != null) {
+      System.out.printf("findClosestVersion: requested %dx%d, snapped to %dx%d (diff=%d)%n\n",
+          numRows, numCols, best.symbolSizeRows, best.symbolSizeColumns, bestScore);
+    }
+    return best;
+  }
+
+  
   /**
    * <p>Encapsulates a set of error-correction blocks in one symbol version. Most versions will
    * use blocks of differing sizes within one version, so, this encapsulates the parameters for

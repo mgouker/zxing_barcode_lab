@@ -121,6 +121,7 @@ final class DecodedBitStreamParser {
             isECIencoded = true; // ECI detection only, atm continue decoding as ASCII
             break;
           default:
+            System.err.printf("decode. mode not found: %d\n", mode);
             throw FormatException.getFormatInstance();
         }
         mode = Mode.ASCII_ENCODE;
@@ -221,6 +222,7 @@ final class DecodedBitStreamParser {
             // Not to be used in ASCII encodation
             // but work around encoders that end with 254, latch back to ASCII
             if (oneByte != 254 || bits.available() != 0) {
+              System.err.printf("decodeAsciiSegment. oneByte: %d, bits.available(): %d\n", oneByte, bits.available());
               throw FormatException.getFormatInstance();
             }
             break;
@@ -270,6 +272,7 @@ final class DecodedBitStreamParser {
                 result.append(c40char);
               }
             } else {
+              System.err.printf("Format Exception in C40 code. i=%d, case 0. shift=%d\n", i, shift);
               throw FormatException.getFormatInstance();
             }
             break;
@@ -301,6 +304,7 @@ final class DecodedBitStreamParser {
                   upperShift = true;
                   break;
                 default:
+                  System.err.printf("Format Exception in C40 code. case 2. i=%d, shift=%d\n", i, shift);
                   throw FormatException.getFormatInstance();
               }
             }
@@ -316,6 +320,7 @@ final class DecodedBitStreamParser {
             shift = 0;
             break;
           default:
+            System.err.printf("Format Exception in C40 code. Default. i=%d, shift=%d\n", i, shift);
             throw FormatException.getFormatInstance();
         }
       }
@@ -361,6 +366,7 @@ final class DecodedBitStreamParser {
                 result.append(textChar);
               }
             } else {
+              System.err.printf("Format Exception in decode text segment code. case 0. i=%d, shift=%d\n", i, shift);
               throw FormatException.getFormatInstance();
             }
             break;
@@ -393,6 +399,7 @@ final class DecodedBitStreamParser {
                   upperShift = true;
                   break;
                 default:
+                  System.err.printf("Format Exception in decode text segment code. case 2. i=%d, shift=%d\n", i, shift);
                   throw FormatException.getFormatInstance();
               }
             }
@@ -409,10 +416,12 @@ final class DecodedBitStreamParser {
               }
               shift = 0;
             } else {
+              System.err.printf("Format Exception in decode text segment code. case 3. i=%d, shift=%d\n", i, shift);
               throw FormatException.getFormatInstance();
             }
             break;
           default:
+            System.err.printf("Format Exception in decode text segment code. default. i=%d, shift=%d\n", i, shift);
             throw FormatException.getFormatInstance();
         }
       }
@@ -431,10 +440,12 @@ final class DecodedBitStreamParser {
     do {
       // If there is only one byte left then it will be encoded as ASCII
       if (bits.available() == 8) {
+        System.out.printf("decodeAnsiX12Segment has only one byte. Interpret as ANSI.\n");
         return;
       }
       int firstByte = bits.readBits(8);
       if (firstByte == 254) {  // Unlatch codeword
+        System.out.printf("decodeAnsiX12Segment has first byte = 254!\n");
         return;
       }
 
@@ -461,6 +472,7 @@ final class DecodedBitStreamParser {
             } else if (cValue < 40) {  // A - Z
               result.append((char) (cValue + 51));
             } else {
+              System.err.printf("Format Exception in decode Ansi X12 Segment code. default case. i=%d\n", i);
               throw FormatException.getFormatInstance();
             }
             break;
@@ -531,6 +543,7 @@ final class DecodedBitStreamParser {
 
     // We're seeing NegativeArraySizeException errors from users.
     if (count < 0) {
+      System.out.printf("decodeBase256Segment has negative size in array.\n");
       throw FormatException.getFormatInstance();
     }
 
@@ -539,6 +552,7 @@ final class DecodedBitStreamParser {
       // Have seen this particular error in the wild, such as at
       // http://www.bcgen.com/demo/IDAutomationStreamingDataMatrix.aspx?MODE=3&D=Fred&PFMT=3&PT=F&X=0.3&O=0&LM=0.2
       if (bits.available() < 8) {
+        System.out.printf("decodeBase256Segment has too few bits.\n");
         throw FormatException.getFormatInstance();
       }
       bytes[i] = (byte) unrandomize255State(bits.readBits(8), codewordPosition++);

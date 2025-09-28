@@ -25,8 +25,10 @@ import com.google.zxing.common.reedsolomon.ReedSolomonDecoder;
 import com.google.zxing.common.reedsolomon.ReedSolomonException;
 
 /**
- * <p>The main class which implements Data Matrix Code decoding -- as opposed to locating and extracting
- * the Data Matrix Code from an image.</p>
+ * <p>
+ * The main class which implements Data Matrix Code decoding -- as opposed to
+ * locating and extracting the Data Matrix Code from an image.
+ * </p>
  *
  * @author bbrown@google.com (Brian Brown)
  */
@@ -39,12 +41,14 @@ public final class Decoder {
   }
 
   /**
-   * <p>Convenience method that can decode a Data Matrix Code represented as a 2D array of booleans.
-   * "true" is taken to mean a black module.</p>
+   * <p>
+   * Convenience method that can decode a Data Matrix Code represented as a 2D
+   * array of booleans. "true" is taken to mean a black module.
+   * </p>
    *
    * @param image booleans representing white/black Data Matrix Code modules
    * @return text and bytes encoded within the Data Matrix Code
-   * @throws FormatException if the Data Matrix Code cannot be decoded
+   * @throws FormatException   if the Data Matrix Code cannot be decoded
    * @throws ChecksumException if error correction fails
    */
   public DecoderResult decode(boolean[][] image) throws FormatException, ChecksumException {
@@ -52,57 +56,83 @@ public final class Decoder {
   }
 
   /**
-   * <p>Decodes a Data Matrix Code represented as a {@link BitMatrix}. A 1 or "true" is taken
-   * to mean a black module.</p>
+   * <p>
+   * Decodes a Data Matrix Code represented as a {@link BitMatrix}. A 1 or "true"
+   * is taken to mean a black module.
+   * </p>
    *
    * @param bits booleans representing white/black Data Matrix Code modules
    * @return text and bytes encoded within the Data Matrix Code
-   * @throws FormatException if the Data Matrix Code cannot be decoded
+   * @throws FormatException   if the Data Matrix Code cannot be decoded
    * @throws ChecksumException if error correction fails
    */
   public DecoderResult decode(BitMatrix bits) throws FormatException, ChecksumException {
-
-    // Construct a parser and read version, error-correction level
     BitMatrixParser parser = new BitMatrixParser(bits);
     Version version = parser.getVersion();
 
-    // Read codewords
-    byte[] codewords = parser.readCodewords();
-    // Separate into data blocks
-    DataBlock[] dataBlocks = DataBlock.getDataBlocks(codewords, version);
+    byte[] codewords;
+    try {
+      codewords = parser.readCodewords();
+    } catch (FormatException fe) {
+      System.out.printf("Decoder", "Failed to read codewords: %s", fe.getMessage());
+      throw fe;
+    }
 
-    // Count total number of data bytes
+    DataBlock[] dataBlocks;
+    dataBlocks = DataBlock.getDataBlocks(codewords, version);
+
+    System.out.printf("Decoder", "version=%s, codewords=%d, dataBlocks=%d",
+        version, codewords != null ? codewords.length : 0,
+        dataBlocks != null ? dataBlocks.length : 0);
+
     int totalBytes = 0;
     for (DataBlock db : dataBlocks) {
       totalBytes += db.getNumDataCodewords();
     }
-    byte[] resultBytes = new byte[totalBytes];
+    System.out.printf("Decoder", "total data bytes=%d", totalBytes);
 
+    byte[] resultBytes = new byte[totalBytes];
     int errorsCorrected = 0;
     int dataBlocksCount = dataBlocks.length;
-    // Error-correct and copy data blocks together into a stream of bytes
+
     for (int j = 0; j < dataBlocksCount; j++) {
       DataBlock dataBlock = dataBlocks[j];
       byte[] codewordBytes = dataBlock.getCodewords();
       int numDataCodewords = dataBlock.getNumDataCodewords();
-      errorsCorrected += correctErrors(codewordBytes, numDataCodewords);
+
+      try {
+        int corrected = correctErrors(codewordBytes, numDataCodewords);
+        errorsCorrected += corrected;
+        System.out.printf("Decoder", "Block %d corrected %d errors", j, corrected);
+      } catch (ChecksumException ce) {
+        System.out.printf("Decoder", "Checksum failed on block %d: %s", j, ce.getMessage());
+        throw ce;
+      }
+
       for (int i = 0; i < numDataCodewords; i++) {
-        // De-interlace data blocks.
         resultBytes[i * dataBlocksCount + j] = codewordBytes[i];
       }
     }
 
-    // Decode the contents of that stream of bytes
-    DecoderResult result = DecodedBitStreamParser.decode(resultBytes);
-    result.setErrorsCorrected(errorsCorrected);
-    return result;
+    try {
+      DecoderResult result = DecodedBitStreamParser.decode(resultBytes);
+      System.out.printf("Decoder", "Decoded text: %s", result.getText());
+      result.setErrorsCorrected(errorsCorrected);
+      return result;
+    } catch (FormatException fe) {
+      System.out.printf("Decoder", "Failed to parse bit stream: %s", fe.getMessage());
+      throw fe;
+    }
   }
 
   /**
-   * <p>Given data and error-correction codewords received, possibly corrupted by errors, attempts to
-   * correct the errors in-place using Reed-Solomon error correction.</p>
+   * <p>
+   * Given data and error-correction codewords received, possibly corrupted by
+   * errors, attempts to correct the errors in-place using Reed-Solomon error
+   * correction.
+   * </p>
    *
-   * @param codewordBytes data and error correction codewords
+   * @param codewordBytes    data and error correction codewords
    * @param numDataCodewords number of codewords that are data bytes
    * @return the number of errors corrected
    * @throws ChecksumException if error correction fails
@@ -118,9 +148,11 @@ public final class Decoder {
     try {
       errorsCorrected = rsDecoder.decodeWithECCount(codewordsInts, codewordBytes.length - numDataCodewords);
     } catch (ReedSolomonException ignored) {
+      System.out.printf("correctErrors has reed solomon exception.\n");
       throw ChecksumException.getChecksumInstance();
     }
-    // Copy back into array of bytes -- only need to worry about the bytes that were data
+    // Copy back into array of bytes -- only need to worry about the bytes that were
+    // data
     // We don't care about errors in the error-correction codewords
     for (int i = 0; i < numDataCodewords; i++) {
       codewordBytes[i] = (byte) codewordsInts[i];

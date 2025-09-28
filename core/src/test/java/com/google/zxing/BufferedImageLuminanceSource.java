@@ -22,7 +22,8 @@ import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 
 /**
- * This LuminanceSource implementation is meant for J2SE clients and our blackbox unit tests.
+ * This LuminanceSource implementation is meant for J2SE clients and our
+ * blackbox unit tests.
  *
  * @author dswitkin@google.com (Daniel Switkin)
  * @author Sean Owen
@@ -61,8 +62,10 @@ public final class BufferedImageLuminanceSource extends LuminanceSource {
         for (int x = 0; x < width; x++) {
           int pixel = buffer[x];
 
-          // The color of fully-transparent pixels is irrelevant. They are often, technically, fully-transparent
-          // black (0 alpha, and then 0 RGB). They are often used, of course as the "white" area in a
+          // The color of fully-transparent pixels is irrelevant. They are often,
+          // technically, fully-transparent
+          // black (0 alpha, and then 0 RGB). They are often used, of course as the
+          // "white" area in a
           // barcode image. Force any such pixel to be white:
           if ((pixel & 0xFF000000) == 0) {
             // white, so we know its luminance is 255
@@ -71,11 +74,8 @@ public final class BufferedImageLuminanceSource extends LuminanceSource {
             // .299R + 0.587G + 0.114B (YUV/YIQ for PAL and NTSC),
             // (306*R) >> 10 is approximately equal to R*0.299, and so on.
             // 0x200 >> 10 is 0.5, it implements rounding.
-            buffer[x] =
-              (306 * ((pixel >> 16) & 0xFF) +
-                601 * ((pixel >> 8) & 0xFF) +
-                117 * (pixel & 0xFF) +
-                0x200) >> 10;
+            buffer[x] = (306 * ((pixel >> 16) & 0xFF) + 601 * ((pixel >> 8) & 0xFF) + 117 * (pixel & 0xFF)
+                + 0x200) >> 10;
           }
         }
         raster.setPixels(left, y, width, 1, buffer);
@@ -106,7 +106,8 @@ public final class BufferedImageLuminanceSource extends LuminanceSource {
     int height = getHeight();
     int area = width * height;
     byte[] matrix = new byte[area];
-    // The underlying raster of image consists of area bytes with the luminance values
+    // The underlying raster of image consists of area bytes with the luminance
+    // values
     image.getRaster().getDataElements(left, top, width, height, matrix);
     return matrix;
   }

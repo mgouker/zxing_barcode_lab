@@ -175,9 +175,16 @@ public final class MultiFormatReader implements Reader {
         try {
           return reader.decode(image, hints);
         } catch (ReaderException re) {
-          // continue
+          if (re instanceof com.google.zxing.FormatException) {
+            System.out.println(reader.getClass().getSimpleName() + " failed with FormatException");
+          } else if (re instanceof com.google.zxing.ChecksumException) {
+            System.out.println(reader.getClass().getSimpleName() + " failed with ChecksumException");
+          } else {
+            System.out.println(reader.getClass().getSimpleName() + " failed: " + re);
+          }
         }
       }
+
       if (hints != null && hints.containsKey(DecodeHintType.ALSO_INVERTED)) {
         // Calling all readers again with inverted image
         image.getBlackMatrix().flip();

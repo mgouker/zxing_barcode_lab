@@ -1,0 +1,21 @@
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.google.zxing</groupId>
+    <artifactId>zxing-parent</artifactId>
+    <version>3.5.4-SNAPSHOT</version>
+  </parent>
+  <artifactId>opencv-detector</artifactId>
+  <name>ZXing OpenCV Rectangle Detector</name>
+  <dependencies>
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bytedeco</groupId>
+      <artifactId>opencv-platform</artifactId>
+      <version>4.10.0-1.5.11</version>
+    </dependency>
+  </dependencies>
+</project>

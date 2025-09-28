@@ -30,6 +30,11 @@
         <version>${zxing.version}</version>
       </dependency>
       <dependency>
+        <groupId>com.google.android</groupId>
+        <artifactId>android</artifactId>
+        <version>4.1.1.4</version> <!-- or another stable version -->
+      </dependency>
+      <dependency>
         <groupId>com.google.zxing</groupId>
         <artifactId>android-core</artifactId>
         <version>${zxing.version}</version>
@@ -45,6 +50,11 @@
         <version>${zxing.version}</version>
       </dependency>
       <dependency>
+        <groupId>com.google.zxing</groupId>
+        <artifactId>opencv-detector</artifactId>
+        <version>${zxing.version}</version>
+      </dependency>
+      <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
         <version>4.13.2</version>
@@ -56,6 +66,8 @@
   <modules>
     <module>core</module>
     <module>javase</module>
+    <module>test-harness</module>
+    <module>opencv-detector</module>
     <!-- android modules are activated by a profile below -->
     <!-- zxingorg activated by a profile below -->
     <!-- appspot app activated by a profile below -->
@@ -782,14 +794,14 @@
       <build>
         <pluginManagement>
           <plugins>
-            <plugin>
-              <groupId>org.apache.maven.plugins</groupId>
-              <artifactId>maven-javadoc-plugin</artifactId>
-              <configuration combine.children="append">
-                <!-- Choose HTML5 output over deprecated HTML 4.01 -->
-                <additionalOptions>-html5</additionalOptions>
-              </configuration>
-            </plugin>
+			<plugin>
+			  <groupId>org.apache.maven.plugins</groupId>
+			  <artifactId>maven-javadoc-plugin</artifactId>
+			  <configuration>
+			    <!-- Choose HTML5 output over deprecated HTML 4.01 -->
+			    <additionalOptions>-html5</additionalOptions>
+			  </configuration>
+			</plugin>
           </plugins>
         </pluginManagement>
       </build>
