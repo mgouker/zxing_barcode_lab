@@ -12,6 +12,11 @@
       <groupId>com.google.zxing</groupId>
       <artifactId>core</artifactId>
     </dependency>
+	<dependency>
+	  <groupId>com.google.zxing</groupId>
+	  <artifactId>javase</artifactId>
+	  <version>3.5.3</version> <!-- match your zxing-core version -->
+	</dependency>
     <dependency>
       <groupId>org.bytedeco</groupId>
       <artifactId>opencv-platform</artifactId>

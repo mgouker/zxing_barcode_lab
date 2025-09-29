@@ -22,7 +22,6 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
-import com.google.zxing.FormatException;
 import com.google.zxing.NotFoundException;
 import com.google.zxing.ResultPoint;
 import com.google.zxing.common.BitMatrix;
@@ -30,7 +29,6 @@ import com.google.zxing.common.DetectorResult;
 import com.google.zxing.common.GridSampler;
 import com.google.zxing.common.detector.ExternalRectangleDetector;
 import com.google.zxing.common.detector.WhiteRectangleDetector;
-import com.google.zxing.datamatrix.decoder.Version;
 
 /**
  * <p>
