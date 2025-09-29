@@ -24,11 +24,12 @@ import com.google.zxing.LuminanceSource;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.NotFoundException;
 import com.google.zxing.Result;
-import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.common.GlobalHistogramBinarizer;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.common.SauvolaBinarizer;
+
+import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 
 /**
  * RecognitionEngine handles decoding of barcodes from images. It applies
@@ -47,7 +48,9 @@ public class RecognitionEngine {
    * preprocessing.
    */
   public RecognitionEngine() {
-    this(List.of(BarcodeFormat.CODE_128, BarcodeFormat.DATA_MATRIX), RecognitionEngineUtils.PreprocOptions.defaults(),
+    this(List.of(BarcodeFormat.CODE_128, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.QR_CODE, 
+        BarcodeFormat.EAN_8, BarcodeFormat.EAN_13, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E), 
+        RecognitionEngineUtils.PreprocOptions.defaults(),
         4);
   }
 

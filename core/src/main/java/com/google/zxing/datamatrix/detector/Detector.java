@@ -22,6 +22,7 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
+import com.google.zxing.FormatException;
 import com.google.zxing.NotFoundException;
 import com.google.zxing.ResultPoint;
 import com.google.zxing.common.BitMatrix;
@@ -29,8 +30,7 @@ import com.google.zxing.common.DetectorResult;
 import com.google.zxing.common.GridSampler;
 import com.google.zxing.common.detector.ExternalRectangleDetector;
 import com.google.zxing.common.detector.WhiteRectangleDetector;
-
-
+import com.google.zxing.datamatrix.decoder.Version;
 
 /**
  * <p>
@@ -68,6 +68,7 @@ public final class Detector {
   }
 
 
+
   /**
    * <p>
    * Detects a Data Matrix Code in an image.
@@ -79,27 +80,19 @@ public final class Detector {
    */
 
   public DetectorResult detect() throws NotFoundException {
-    ResultPoint[] cornerPoints;
 
+    ResultPoint[] cornerPoints;
     try {
       cornerPoints = rectangleDetector.detect();
     } catch (NotFoundException nfe) {
       cornerPoints = tryExternalDetectors(image, "primary");
     }
-
     ResultPoint[] points = detectSolid1(cornerPoints);
     points = detectSolid2(points);
     points[3] = correctTopRight(points);
     if (points[3] == null) {
-      // Try external once more if topology is impossible
-      ResultPoint[] ext = tryExternalDetectors(image, "topology");
-      points = detectSolid2(detectSolid1(ext));
-      points[3] = correctTopRight(points);
-      if (points[3] == null) {
-        throw NotFoundException.getNotFoundInstance();
-      }
+      throw NotFoundException.getNotFoundInstance();
     }
-
     points = shiftToModuleCenter(points);
 
     ResultPoint topLeft = points[0];
@@ -116,59 +109,45 @@ public final class Detector {
       dimensionRight += 1;
     }
 
-    if (badDimensions(dimensionTop, dimensionRight)) {
-      ResultPoint[] ext = tryExternalDetectors(image, "dims");
-      points = shiftToModuleCenter(detectSolid2(detectSolid1(ext)));
-      topLeft = points[0];
-      bottomLeft = points[1];
-      bottomRight = points[2];
-      topRight = points[3];
-
-      dimensionTop = transitionsBetween(topLeft, topRight) + 1;
-      dimensionRight = transitionsBetween(bottomRight, topRight) + 1;
-      if ((dimensionTop & 0x01) == 1) {
-        dimensionTop += 1;
-      }
-      if ((dimensionRight & 0x01) == 1) {
-        dimensionRight += 1;
-      }
-    }
-
-    System.out.printf(
-        "Corner points: TL(%.1f,%.1f) BL(%.1f,%.1f) BR(%.1f,%.1f) TR(%.1f,%.1f)\n",
-        topLeft.getX(), topLeft.getY(),
-        bottomLeft.getX(), bottomLeft.getY(),
-        bottomRight.getX(), bottomRight.getY(),
-        topRight.getX(), topRight.getY());
-
-    System.out.printf("Detector: ->Computed dimensions: top=%d right=%d\n", dimensionTop, dimensionRight);
-
-    BitMatrix bits;
-    try {
-      bits = sampleGrid(image, topLeft, bottomLeft, bottomRight, topRight, dimensionTop, dimensionRight, false);
-    } catch (NotFoundException e) {
-      System.out.println("Detector: standard grid failed, retrying with jiggle sampling…\n");
-      bits = sampleGridWithJiggle(image, topLeft, bottomLeft, bottomRight, topRight, dimensionTop, dimensionRight);
+    if (4 * dimensionTop < 6 * dimensionRight && 4 * dimensionRight < 6 * dimensionTop) {
+      // The matrix is square
+      dimensionTop = dimensionRight = Math.max(dimensionTop, dimensionRight);
     }
 
     try {
-      saveBitMatrixForDebugging(bits, "detector-bm-");
-    } catch (IOException e) {
-      System.err.println("Cannot write bitmap to debugging file.\n");
-      e.printStackTrace();
+      BitMatrix bits = sampleGrid(image, topLeft, bottomLeft, bottomRight, topRight, dimensionTop, dimensionRight,
+          false);
+
+      try {
+        saveBitMatrixForDebugging(bits, "detector-bm-");
+      } catch (IOException e) {
+        System.err.println("Cannot write bitmap to debugging file.\n");
+        e.printStackTrace();
+      }
+      return new DetectorResult(bits, new ResultPoint[] { topLeft, bottomLeft, bottomRight, topRight });
+
+    } catch (NotFoundException e4) {
+
+      BitMatrix bits = sampleGridWithJiggle(image, topLeft, bottomLeft, bottomRight, topRight, dimensionTop,
+          dimensionRight);
+      try {
+        saveBitMatrixForDebugging(bits, "detector-bm-");
+      } catch (IOException e) {
+        System.err.println("Cannot write bitmap to debugging file.\n");
+        e.printStackTrace();
+      }
+      return new DetectorResult(bits, new ResultPoint[] { topLeft, bottomLeft, bottomRight, topRight });
     }
-    return new DetectorResult(bits, new ResultPoint[]{topLeft, bottomLeft, bottomRight, topRight});
   }
 
-
   private static ResultPoint[] tryExternalDetectors(BitMatrix image, String reason) throws NotFoundException {
-    java.util.ServiceLoader<ExternalRectangleDetector> loader =
-        java.util.ServiceLoader.load(ExternalRectangleDetector.class);
+    java.util.ServiceLoader<ExternalRectangleDetector> loader = java.util.ServiceLoader
+        .load(ExternalRectangleDetector.class);
 
     for (ExternalRectangleDetector det : loader) {
       try {
-        System.out.println("Detector: trying external rectangle detector (" + det.getName() + ") because: " 
-            + reason + "\n");
+        System.out
+            .println("Detector: trying external rectangle detector (" + det.getName() + ") because: " + reason + "\n");
         ResultPoint[] pts = det.detect(image);
         if (pts != null && pts.length == 4) {
           return pts;
@@ -178,18 +157,6 @@ public final class Detector {
       }
     }
     throw NotFoundException.getNotFoundInstance();
-  }
-
-  private static boolean badDimensions(int top, int right) {
-    if (top < 8 || right < 8) {
-      return true;
-    }
-    int max = Math.max(top, right);
-    int min = Math.min(top, right);
-    if (max > 3 * min) {
-      return true;
-    }
-    return false;
   }
 
   /**
@@ -554,20 +521,20 @@ public final class Detector {
    * something like Bresenham's algorithm.
    */
   private int transitionsBetween(ResultPoint from, ResultPoint to) {
-    // See QR Code Detector, sizeOfBlackWhiteBlackRun()
     int fromX = (int) from.getX();
     int fromY = (int) from.getY();
     int toX = (int) to.getX();
     int toY = Math.min(image.getHeight() - 1, (int) to.getY());
 
     boolean steep = Math.abs(toY - fromY) > Math.abs(toX - fromX);
+    int tmp;
     if (steep) {
-      int temp = fromX;
+      tmp = fromX;
       fromX = fromY;
-      fromY = temp;
-      temp = toX;
+      fromY = tmp;
+      tmp = toX;
       toX = toY;
-      toY = temp;
+      toY = tmp;
     }
 
     int dx = Math.abs(toX - fromX);
@@ -576,8 +543,11 @@ public final class Detector {
     int ystep = fromY < toY ? 1 : -1;
     int xstep = fromX < toX ? 1 : -1;
     int transitions = 0;
+
     boolean inBlack = image.get(steep ? fromY : fromX, steep ? fromX : fromY);
-    for (int x = fromX, y = fromY; x != toX; x += xstep) {
+    int x = fromX;
+    int y = fromY;
+    while (x != toX) {
       boolean isBlack = image.get(steep ? y : x, steep ? x : y);
       if (isBlack != inBlack) {
         transitions++;
@@ -591,6 +561,56 @@ public final class Detector {
         y += ystep;
         error -= dx;
       }
+      x += xstep;
+    }
+    return transitions;
+  }
+
+  private int transitionsBetweenPrev(ResultPoint from, ResultPoint to) {
+    int maxX = image.getWidth() - 1;
+    int maxY = image.getHeight() - 1;
+
+    int fromX = Math.max(0, Math.min(maxX, (int) from.getX()));
+    int fromY = Math.max(0, Math.min(maxY, (int) from.getY()));
+    int toX = Math.max(0, Math.min(maxX, (int) to.getX()));
+    int toY = Math.max(0, Math.min(maxY, (int) to.getY()));
+
+    boolean steep = Math.abs(toY - fromY) > Math.abs(toX - fromX);
+    int tmp;
+    if (steep) {
+      tmp = fromX;
+      fromX = fromY;
+      fromY = tmp;
+      tmp = toX;
+      toX = toY;
+      toY = tmp;
+    }
+
+    int dx = Math.abs(toX - fromX);
+    int dy = Math.abs(toY - fromY);
+    int error = -dx / 2;
+    int ystep = fromY < toY ? 1 : -1;
+    int xstep = fromX < toX ? 1 : -1;
+    int transitions = 0;
+
+    boolean inBlack = image.get(steep ? fromY : fromX, steep ? fromX : fromY);
+    int x = fromX;
+    int y = fromY;
+    while (x != toX) {
+      boolean isBlack = image.get(steep ? y : x, steep ? x : y);
+      if (isBlack != inBlack) {
+        transitions++;
+        inBlack = isBlack;
+      }
+      error += dy;
+      if (error > 0) {
+        if (y == toY) {
+          break;
+        }
+        y += ystep;
+        error -= dx;
+      }
+      x += xstep;
     }
     return transitions;
   }

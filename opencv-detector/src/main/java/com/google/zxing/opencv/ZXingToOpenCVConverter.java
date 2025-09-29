@@ -1,4 +1,4 @@
-package com.google.zxing.client.j2se.opencv;
+package com.google.zxing.opencv;
 
 import org.bytedeco.opencv.opencv_core.Mat;
 import org.opencv.core.CvType;

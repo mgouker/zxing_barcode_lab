@@ -2,7 +2,9 @@ package com.google.zxing.opencv;
 
 import com.google.zxing.NotFoundException;
 import com.google.zxing.ResultPoint;
-import com.google.zxing.datamatrix.detector.ExternalRectangleDetector;
+
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.common.detector.ExternalRectangleDetector;
 
 import org.bytedeco.opencv.global.opencv_imgproc;
 import org.bytedeco.opencv.opencv_core.Mat;
@@ -15,42 +17,50 @@ import org.bytedeco.opencv.opencv_core.Rect;
 
 public final class OpenCVRectangleDetector implements ExternalRectangleDetector {
 
+  @Override
   public String getName() {
     return "OpenCV";
   }
 
-  public ResultPoint[] detect(BitMatrix image) throws NotFoundException {
-    // Convert BitMatrix → Mat here
-    Mat mat = ZXingToOpenCVConverter.toMat(image);
-    return detectInternal(mat);
-}
-  
   @Override
-  public ResultPoint[] detectInternal(Mat image) throws NotFoundException {
-    if (!(image instanceof Mat)) {
+  public ResultPoint[] detect(Object image) throws NotFoundException {
+    Mat mat = null;
+    if (image instanceof BitMatrix) {
+      System.out.println("BitMatrix received in detect().");
+      // Convert BitMatrix → Mat here
+      mat = ZXingToOpenCVConverter.toMat((BitMatrix) image);
+    } else if (image instanceof Mat) {
+      System.out.println("Mat received in detect().");
+      mat = (Mat) image;
+    } else {
+      System.err.println("invalid object in detect.");
       throw NotFoundException.getNotFoundInstance();
     }
-    Mat mat = (Mat) image;
+
+    return detectInternal(mat);
+  }
+
+  public ResultPoint[] detectInternal(Mat image) throws NotFoundException {
 
     Mat gray = new Mat();
-    opencv_imgproc.cvtColor(mat, gray, opencv_imgproc.COLOR_BGR2GRAY);
+    if (image.channels() == 1) {
+      // Already grayscale
+      gray = image.clone();
+    } else {
+      opencv_imgproc.cvtColor(image, gray, opencv_imgproc.COLOR_BGR2GRAY);
+    }
 
     Mat binary = new Mat();
-    opencv_imgproc.adaptiveThreshold(
-        gray, binary, 255,
-        opencv_imgproc.ADAPTIVE_THRESH_MEAN_C,
-        opencv_imgproc.THRESH_BINARY,
-        15, 10);
+    opencv_imgproc.adaptiveThreshold(gray, binary, 255, opencv_imgproc.ADAPTIVE_THRESH_MEAN_C,
+        opencv_imgproc.THRESH_BINARY, 15, 10);
 
     MatVector contours = new MatVector();
     Mat hierarchy = new Mat();
-    opencv_imgproc.findContours(
-        binary, contours, hierarchy,
-        opencv_imgproc.RETR_EXTERNAL,
+    opencv_imgproc.findContours(binary, contours, hierarchy, opencv_imgproc.RETR_EXTERNAL,
         opencv_imgproc.CHAIN_APPROX_SIMPLE);
 
-    int w = mat.cols();
-    int h = mat.rows();
+    int w = image.cols();
+    int h = image.rows();
     double minArea = (w * h) * 0.0002;
     double maxArea = (w * h) * 0.10;
 

@@ -175,13 +175,13 @@ public final class MultiFormatReader implements Reader {
         try {
           return reader.decode(image, hints);
         } catch (ReaderException re) {
-          if (re instanceof com.google.zxing.FormatException) {
-            System.out.println(reader.getClass().getSimpleName() + " failed with FormatException");
-          } else if (re instanceof com.google.zxing.ChecksumException) {
-            System.out.println(reader.getClass().getSimpleName() + " failed with ChecksumException");
-          } else {
-            System.out.println(reader.getClass().getSimpleName() + " failed: " + re);
-          }
+//          if (re instanceof com.google.zxing.FormatException) {
+//            System.out.println(reader.getClass().getSimpleName() + " failed with FormatException");
+//          } else if (re instanceof com.google.zxing.ChecksumException) {
+//            System.out.println(reader.getClass().getSimpleName() + " failed with ChecksumException");
+//          } else {
+//            System.out.println(reader.getClass().getSimpleName() + " failed: " + re);
+//          }
         }
       }
 
@@ -195,7 +195,13 @@ public final class MultiFormatReader implements Reader {
           try {
             return reader.decode(image, hints);
           } catch (ReaderException re) {
-            // continue
+//            if (re instanceof com.google.zxing.FormatException) {
+//              System.out.println(reader.getClass().getSimpleName() + " inverted failed with FormatException");
+//            } else if (re instanceof com.google.zxing.ChecksumException) {
+//              System.out.println(reader.getClass().getSimpleName() + " inverted failed with ChecksumException");
+//            } else {
+//              System.out.println(reader.getClass().getSimpleName() + " inverted failed: " + re);
+//            }
           }
         }
       }

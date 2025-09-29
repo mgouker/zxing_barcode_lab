@@ -34,9 +34,12 @@ final class BitMatrixParser {
    */
   BitMatrixParser(BitMatrix bitMatrix) throws FormatException {
     int dimension = bitMatrix.getHeight();
-    if (dimension < 8 || dimension > 144 || (dimension & 0x01) != 0) {
+    if (dimension < 8 || dimension > 144) {
       System.err.printf("BitMatrixParser constructor has invalid %d dimension.", dimension);
       throw FormatException.getFormatInstance();
+    }
+    if ((dimension & 0x01) == 1) { // odd
+      dimension++; // snap up in a futile attempt for something from nothing.
     }
 
     version = readVersion(bitMatrix);
@@ -405,15 +408,17 @@ final class BitMatrixParser {
    *
    * @param bitMatrix Original {@link BitMatrix} with alignment patterns
    * @return BitMatrix that has the alignment patterns removed
+   * @throws FormatException - may not be correct dimensions.
    */
-  private BitMatrix extractDataRegion(BitMatrix bitMatrix) {
+  private BitMatrix extractDataRegion(BitMatrix bitMatrix) throws FormatException {
     int symbolSizeRows = version.getSymbolSizeRows();
     int symbolSizeColumns = version.getSymbolSizeColumns();
 
     if (bitMatrix.getHeight() != symbolSizeRows) {
       System.err.printf("extract data region. Symbol Size Rows: %d, BitMatrix Height: %d\n", 
           symbolSizeRows, bitMatrix.getHeight());
-      throw new IllegalArgumentException("Dimension of bitMatrix must match the version size");
+      System.err.printf("Dimension of bitMatrix must match the version size");
+      throw com.google.zxing.FormatException.getFormatInstance();
     }
 
     int dataRegionSizeRows = version.getDataRegionSizeRows();

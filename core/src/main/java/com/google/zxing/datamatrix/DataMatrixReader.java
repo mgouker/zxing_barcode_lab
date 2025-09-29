@@ -88,62 +88,6 @@ public final class DataMatrixReader implements Reader {
     return result;
   }
 
-//  try {
-//    Class<?> clazz = Class.forName("com.google.zxing.opencv.OpenCVRectangleDetector");
-//    ExternalRectangleDetector cv = (ExternalRectangleDetector) clazz.newInstance();
-//    ResultPoint[] cvPoints = cv.detect(ZXingToOpenCVConverter.toMat(image));
-//    // use cvPoints...
-//  } catch (ClassNotFoundException e) {
-//    // OpenCV not available, ignore
-//  }
-
-  
-  
-//  @Override
-//  public Result decode(BinaryBitmap image, Map<DecodeHintType, ?> hints)
-//      throws NotFoundException, ChecksumException, FormatException {
-//    DecoderResult decoderResult;
-//    ResultPoint[] points;
-//
-//    System.out.printf("DataMatrixReader: starting decode, size=%dx%d%n", image.getWidth(), image.getHeight());
-//
-//    if (hints != null && hints.containsKey(DecodeHintType.PURE_BARCODE)) {
-//      System.out.println("Hint PURE_BARCODE detected");
-//      BitMatrix bits = extractPureBits(image.getBlackMatrix());
-//      System.out.printf("Extracted pure bits: %dx%d%n", bits.getWidth(), bits.getHeight());
-//      decoderResult = decoder.decode(bits);
-//      points = NO_POINTS;
-//    } else {
-//      Detector detector = new Detector(image.getBlackMatrix());
-//      DetectorResult detectorResult = detector.detect();
-//      System.out.printf("Detector returned matrix: %dx%d, points=%d%n", detectorResult.getBits().getWidth(),
-//          detectorResult.getBits().getHeight(), detectorResult.getPoints().length);
-//
-//      decoderResult = decoder.decode(detectorResult.getBits());
-//      points = detectorResult.getPoints();
-//    }
-//
-//    System.out.printf("Decoded text: %s, bytes=%d%n", decoderResult.getText(),
-//        decoderResult.getRawBytes() != null ? decoderResult.getRawBytes().length : 0);
-//
-//    Result result = new Result(decoderResult.getText(), decoderResult.getRawBytes(), points, 
-//  BarcodeFormat.DATA_MATRIX);
-//
-//    List<byte[]> byteSegments = decoderResult.getByteSegments();
-//    if (byteSegments != null) {
-//      result.putMetadata(ResultMetadataType.BYTE_SEGMENTS, byteSegments);
-//    }
-//    String ecLevel = decoderResult.getECLevel();
-//    if (ecLevel != null) {
-//      result.putMetadata(ResultMetadataType.ERROR_CORRECTION_LEVEL, ecLevel);
-//    }
-//
-//    result.putMetadata(ResultMetadataType.ERRORS_CORRECTED, decoderResult.getErrorsCorrected());
-//    result.putMetadata(ResultMetadataType.SYMBOLOGY_IDENTIFIER, "]d" + decoderResult.getSymbologyModifier());
-//
-//    return result;
-//  }
-
   @Override
   public void reset() {
     // do nothing

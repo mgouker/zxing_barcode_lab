@@ -35,7 +35,7 @@ public final class BarcodeLog {
   public static final int DEBUG = 32;
 
   /** Enabled levels bitmask. */
-  private static int enabledLevels = ERROR | WARNING | EXECUTION_FLOW;
+  private static int enabledLevels = ERROR | WARNING | DEBUG | EXECUTION_FLOW;
 
   private final boolean toFile;
   private final boolean echoToConsole;
